@@ -1,11 +1,10 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { RenderModeType, RtcSurfaceView } from 'react-native-agora';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { LiveChannel } from '@/components/watch/live-channel';
 import { Spacing } from '@/constants/theme';
 import type { LiveStream } from '@/data/live-streams';
-import { useLiveChannel } from '@/hooks/use-live-channel';
 
 type LivePageProps = {
   stream: LiveStream;
@@ -55,33 +54,6 @@ export function LivePage({ stream, active, onError }: LivePageProps) {
   );
 }
 
-function LiveChannel({ stream, onError }: { stream: LiveStream; onError: () => void }) {
-  const hostUids = useLiveChannel(stream.channelName, onError);
-
-  if (hostUids.length === 0) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color="#ffffff" size="large" />
-      </View>
-    );
-  }
-
-  // Co-hosts share the screen side by side, like the tiles on the web watch page.
-  // No `connection` prop: that switches the view to setupRemoteVideoEx, which only binds to
-  // channels joined with joinChannelEx — with a plain joinChannel the video never draws.
-  return (
-    <View style={styles.hosts}>
-      {hostUids.map((uid) => (
-        <RtcSurfaceView
-          key={uid}
-          style={styles.host}
-          canvas={{ uid, renderMode: RenderModeType.RenderModeFit }}
-        />
-      ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   page: {
     flex: 1,
@@ -91,13 +63,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  hosts: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  host: {
-    flex: 1,
   },
   topBar: {
     position: 'absolute',

@@ -3,12 +3,19 @@
     "name": "streamline-mobile",
     "slug": "streamline-mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/images/icon.png",
     "scheme": "streamlinemobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.siliconvalley.skriin",
+      "appleTeamId": "NLR94A34CQ",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Skriin uses the camera when you go live.",
+        "NSMicrophoneUsageDescription": "Skriin uses the microphone when you go live."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,11 +39,23 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-status-bar",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "5aa46b33-0cdf-485e-b17a-ab842617fd63"
+      }
     }
   }
 }

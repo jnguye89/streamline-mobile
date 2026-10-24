@@ -5,7 +5,9 @@ import { useEffect, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ProfileButtonSize } from '@/components/profile-button';
 import { ThemedText } from '@/components/themed-text';
+import { OwnerAvatar } from '@/components/watch/owner-avatar';
 import { Spacing } from '@/constants/theme';
 import { addLike, addView, type Vod } from '@/data/videos';
 
@@ -78,7 +80,11 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
         key={active ? 'active' : 'idle'}
         player={player}
         style={StyleSheet.absoluteFill}
-        contentFit="contain"
+        // Fill the whole screen, cropping whatever overflows, rather than letterboxing.
+        contentFit="cover"
+        // Android: neighboring "cover" views misplace their video on the default SurfaceView,
+        // and a TextureView also follows the pager's swipe transform. Ignored on iOS.
+        surfaceType="textureView"
         nativeControls={active}
         fullscreenOptions={{ enable: true }}
       />
@@ -90,7 +96,8 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
           {
             paddingTop: insets.top + Spacing.three,
             paddingLeft: insets.left + Spacing.three,
-            paddingRight: insets.right + Spacing.three,
+            // Leave the top-right corner to the profile button.
+            paddingRight: insets.right + Spacing.three + ProfileButtonSize + Spacing.two,
           },
         ]}>
         {status === 'error' && (
@@ -115,6 +122,15 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
             onPress={video.liked ? undefined : onLike}
           />
         </View>
+      </View>
+
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.owner,
+          { left: insets.left + Spacing.three, bottom: insets.bottom + Spacing.three },
+        ]}>
+        <OwnerAvatar ownerId={video.user} />
       </View>
     </View>
   );
@@ -147,6 +163,9 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  owner: {
+    position: 'absolute',
   },
   topBar: {
     position: 'absolute',

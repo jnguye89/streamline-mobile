@@ -37,6 +37,8 @@ type WatchPagerProps = {
   onNext: () => void;
   onPrevious: () => void;
   onUpdateVod: (patch: Partial<Vod>) => void;
+  /** False while another screen (e.g. the profile) covers the feed: nothing plays. */
+  focused: boolean;
 };
 
 /**
@@ -44,7 +46,15 @@ type WatchPagerProps = {
  * the finger in from the side. Neighboring videos are already loaded by the time they're on
  * screen; live streams only join their channel once they're current.
  */
-export function WatchPager({ current, previousItem, nextItem, onNext, onPrevious, onUpdateVod }: WatchPagerProps) {
+export function WatchPager({
+  current,
+  previousItem,
+  nextItem,
+  onNext,
+  onPrevious,
+  onUpdateVod,
+  focused,
+}: WatchPagerProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const offset = useSharedValue(0);
@@ -126,14 +136,14 @@ export function WatchPager({ current, previousItem, nextItem, onNext, onPrevious
               {item.type === 'vod' ? (
                 <VodPage
                   video={item.video}
-                  active={slot === 0}
+                  active={slot === 0 && focused}
                   onEnded={hasNext ? goNext : undefined}
                   onError={onError}
                   onPlaying={onPlaying}
                   onUpdate={onUpdateVod}
                 />
               ) : (
-                <LivePage stream={item.stream} active={slot === 0} onError={onError} />
+                <LivePage stream={item.stream} active={slot === 0 && focused} onError={onError} />
               )}
             </Slot>
           ))}

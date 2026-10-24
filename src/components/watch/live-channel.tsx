@@ -21,7 +21,8 @@ export function LiveChannel({ stream, onError }: LiveChannelProps) {
     );
   }
 
-  // Co-hosts share the screen side by side, like the tiles on the web watch page.
+  // Co-hosts share the screen side by side, like the tiles on the web watch page. Each tile is
+  // filled (RenderModeHidden crops the overflow) to match the edge-to-edge VODs.
   // No `connection` prop: that switches the view to setupRemoteVideoEx, which only binds to
   // channels joined with joinChannelEx — with a plain joinChannel the video never draws.
   return (
@@ -30,7 +31,7 @@ export function LiveChannel({ stream, onError }: LiveChannelProps) {
         <RtcSurfaceView
           key={uid}
           style={styles.host}
-          canvas={{ uid, renderMode: RenderModeType.RenderModeFit }}
+          canvas={{ uid, renderMode: RenderModeType.RenderModeHidden }}
         />
       ))}
     </View>

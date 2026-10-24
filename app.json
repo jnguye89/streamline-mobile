@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "streamline-mobile",
+    "name": "skriin",
     "slug": "streamline-mobile",
     "version": "1.0.0",
     "orientation": "landscape",
@@ -24,7 +24,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.siliconvalley.skriin"
     },
     "web": {
       "output": "server",
@@ -37,11 +38,22 @@
         {
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 76,
+          "dark": {
+            "backgroundColor": "#000000",
+            "image": "./assets/images/splash-icon.png"
+          }
         }
       ],
       "expo-status-bar",
-      "expo-video"
+      "expo-video",
+      [
+        "react-native-auth0",
+        {
+          "domain": "auth.skriin.com",
+          "customScheme": "skriin"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

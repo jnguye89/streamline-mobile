@@ -1,18 +1,43 @@
+import { useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { useAuth0 } from 'react-native-auth0';
 
+import { ProfileButton } from '@/components/profile-button';
 import { ThemedText } from '@/components/themed-text';
 import { WatchPager } from '@/components/watch/watch-pager';
 import { Spacing } from '@/constants/theme';
 import { useWatchFeed } from '@/hooks/use-watch-feed';
 
 export default function WatchScreen() {
-  const feed = useWatchFeed();
+  // Wait for Auth0 to restore a saved session first, so the very first feed request already
+  // carries the viewer's token and comes back with their likes.
+  const { isLoading: authLoading } = useAuth0();
 
   return (
     <View style={styles.screen}>
       <StatusBar hidden />
 
+      {authLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color="#ffffff" size="large" />
+        </View>
+      ) : (
+        <WatchFeed />
+      )}
+
+      <ProfileButton />
+    </View>
+  );
+}
+
+function WatchFeed() {
+  const feed = useWatchFeed();
+  // The feed stays mounted under pushed screens; stop playback (and leave live channels) there.
+  const focused = useIsFocused();
+
+  return (
+    <>
       {feed.current ? (
         <WatchPager
           current={feed.current}
@@ -21,6 +46,7 @@ export default function WatchScreen() {
           onNext={feed.next}
           onPrevious={feed.previous}
           onUpdateVod={feed.updateCurrentVod}
+          focused={focused}
         />
       ) : (
         <View style={styles.centered}>
@@ -43,7 +69,7 @@ export default function WatchScreen() {
           )}
         </View>
       )}
-    </View>
+    </>
   );
 }
 

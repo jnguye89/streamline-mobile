@@ -11,7 +11,7 @@ type LiveChannelProps = {
 
 /** The host video for one live stream, joined over Agora while mounted. */
 export function LiveChannel({ stream, onError }: LiveChannelProps) {
-  const hostUids = useLiveChannel(stream.channelName, onError);
+  const { hostUids, verticalUids } = useLiveChannel(stream.channelName, onError);
 
   if (hostUids.length === 0) {
     return (
@@ -21,8 +21,9 @@ export function LiveChannel({ stream, onError }: LiveChannelProps) {
     );
   }
 
-  // Co-hosts share the screen side by side, like the tiles on the web watch page. Each tile is
-  // filled (RenderModeHidden crops the overflow) to match the edge-to-edge VODs.
+  // Co-hosts share the screen side by side, like the tiles on the web watch page. Like VODs,
+  // horizontal video fills its tile (RenderModeHidden crops the overflow) and vertical video
+  // fits inside it, as does anything whose shape isn't known yet.
   // No `connection` prop: that switches the view to setupRemoteVideoEx, which only binds to
   // channels joined with joinChannelEx — with a plain joinChannel the video never draws.
   return (
@@ -31,7 +32,11 @@ export function LiveChannel({ stream, onError }: LiveChannelProps) {
         <RtcSurfaceView
           key={uid}
           style={styles.host}
-          canvas={{ uid, renderMode: RenderModeType.RenderModeHidden }}
+          canvas={{
+            uid,
+            renderMode:
+              verticalUids[uid] === false ? RenderModeType.RenderModeHidden : RenderModeType.RenderModeFit,
+          }}
         />
       ))}
     </View>

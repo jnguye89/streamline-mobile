@@ -1,15 +1,30 @@
 import { useEvent, useEventListener } from 'expo';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import {
+  Directions,
+  GestureDetector,
+  useExclusiveGestures,
+  useFlingGesture,
+  useSimultaneousGestures,
+  useTapGesture,
+} from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProfileButtonSize } from '@/components/profile-button';
 import { ThemedText } from '@/components/themed-text';
+import { OnVideoShadow } from '@/components/user-mark';
+import { HeartBurst, LikeColor } from '@/components/watch/heart-burst';
 import { OwnerAvatar } from '@/components/watch/owner-avatar';
+import { VideoControls } from '@/components/watch/video-controls';
 import { Spacing } from '@/constants/theme';
 import { addLike, addView, type Vod } from '@/data/videos';
+import { useOpenProfile } from '@/hooks/use-open-profile';
+
+// How long the controls stay up after the last tap while the video plays.
+const CONTROLS_HIDE_MS = 3000;
 
 type VodPageProps = {
   video: Vod;
@@ -28,6 +43,8 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
   const player = useVideoPlayer(video.src, (p) => {
     // Browsers only allow autoplay with sound off; native platforms autoplay unmuted.
     p.muted = Platform.OS === 'web';
+    // Drives the progress bar in VideoControls.
+    p.timeUpdateEventInterval = 0.25;
   });
   const viewed = useRef(false);
 
@@ -66,11 +83,76 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
   });
 
   const { status } = useEvent(player, 'statusChange', { status: player.status });
+
+  // Horizontal videos fill the screen; vertical ones fit inside it rather than being cropped
+  // to a sliver. The track size the player reports ignores the rotation flag phones record
+  // vertical video with, so measure a tiny first-frame thumbnail instead — it has rotation
+  // applied. Until that's known, fit rather than risk zooming a vertical video.
+  const [isVertical, setIsVertical] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (status !== 'readyToPlay' || isVertical !== null) return;
+    let cancelled = false;
+    player
+      .generateThumbnailsAsync(0, { maxWidth: 64, maxHeight: 64 })
+      .then(([frame]) => {
+        if (!cancelled && frame) setIsVertical(frame.height > frame.width);
+      })
+      .catch((e) => console.warn('Couldn’t measure video:', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [player, status, isVertical]);
   const onLike = () => {
     if (video.liked) return;
     onUpdate({ liked: true, likeCount: video.likeCount + 1 });
     addLike(video.id).catch(() => {});
   };
+
+  // Double tap anywhere on the video likes it. Already liked, it just shows the heart again —
+  // it never unlikes, and never counts twice.
+  const [bursts, setBursts] = useState<{ key: number; x: number; y: number }[]>([]);
+  const doubleTap = useTapGesture({
+    numberOfTaps: 2,
+    enabled: active,
+    runOnJS: true,
+    onActivate: ({ x, y }) => {
+      onLike();
+      setBursts((current) => [...current, { key: Date.now(), x, y }]);
+    },
+  });
+
+  // A single tap shows/hides the controls. It only fires once a double tap has been ruled
+  // out, so the first tap of a like doesn't flash them.
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const [lastInteraction, setLastInteraction] = useState(0);
+  const singleTap = useTapGesture({
+    enabled: active,
+    runOnJS: true,
+    onActivate: () => {
+      setControlsVisible((visible) => !visible);
+      setLastInteraction(Date.now());
+    },
+  });
+  // Swipe up for the owner's profile, same as tapping their icon. Horizontal swipes still
+  // belong to the pager, which gives up as soon as a drag turns vertical.
+  const openProfile = useOpenProfile();
+  const swipeUp = useFlingGesture({
+    direction: Directions.UP,
+    enabled: active && !!video.user,
+    runOnJS: true,
+    onActivate: () => openProfile(video.user),
+  });
+  const taps = useExclusiveGestures(doubleTap, singleTap);
+  const pageGestures = useSimultaneousGestures(taps, swipeUp);
+
+  // Tuck the controls away a few seconds after the last interaction while playing; paused,
+  // they stay up.
+  const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
+  useEffect(() => {
+    if (!controlsVisible || !isPlaying) return;
+    const timer = setTimeout(() => setControlsVisible(false), CONTROLS_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [controlsVisible, isPlaying, lastInteraction]);
 
   return (
     <View style={styles.page}>
@@ -80,14 +162,20 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
         key={active ? 'active' : 'idle'}
         player={player}
         style={StyleSheet.absoluteFill}
-        // Fill the whole screen, cropping whatever overflows, rather than letterboxing.
-        contentFit="cover"
+        contentFit={isVertical === false ? 'cover' : 'contain'}
         // Android: neighboring "cover" views misplace their video on the default SurfaceView,
         // and a TextureView also follows the pager's swipe transform. Ignored on iOS.
         surfaceType="textureView"
-        nativeControls={active}
-        fullscreenOptions={{ enable: true }}
+        nativeControls={false}
       />
+
+      <GestureDetector gesture={pageGestures}>
+        <View style={StyleSheet.absoluteFill} />
+      </GestureDetector>
+
+      {active && controlsVisible && (
+        <VideoControls player={player} onInteract={() => setLastInteraction(Date.now())} />
+      )}
 
       <View
         pointerEvents="box-none"
@@ -117,6 +205,7 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
                 ? { ios: 'heart.fill', android: 'favorite', web: 'favorite' }
                 : { ios: 'heart', android: 'favorite_border', web: 'favorite_border' }
             }
+            iconColor={video.liked ? LikeColor : undefined}
             label={video.likeCount.toLocaleString()}
             accessibilityLabel={video.liked ? 'Already liked' : 'Like'}
             onPress={video.liked ? undefined : onLike}
@@ -132,18 +221,28 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
         ]}>
         <OwnerAvatar ownerId={video.user} />
       </View>
+
+      {bursts.map((burst) => (
+        <HeartBurst
+          key={burst.key}
+          x={burst.x}
+          y={burst.y}
+          onDone={() => setBursts((current) => current.filter((b) => b.key !== burst.key))}
+        />
+      ))}
     </View>
   );
 }
 
 type StatProps = {
   icon: SymbolViewProps['name'];
+  iconColor?: string;
   label: string;
   accessibilityLabel: string;
   onPress?: () => void;
 };
 
-function Stat({ icon, label, accessibilityLabel, onPress }: StatProps) {
+function Stat({ icon, iconColor = '#ffffff', label, accessibilityLabel, onPress }: StatProps) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : 'text'}
@@ -151,7 +250,7 @@ function Stat({ icon, label, accessibilityLabel, onPress }: StatProps) {
       disabled={!onPress}
       onPress={onPress}
       style={({ pressed }) => [styles.stat, pressed && styles.pressed]}>
-      <SymbolView name={icon} tintColor="#ffffff" size={18} />
+      <SymbolView name={icon} tintColor={iconColor} size={18} />
       <ThemedText type="smallBold" style={styles.onVideo}>
         {label}
       </ThemedText>
@@ -187,11 +286,13 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    // No backdrop, like the profile icons; the shadow keeps the icon readable on bright video.
+    ...OnVideoShadow,
   },
   onVideo: {
     color: '#ffffff',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 4,
   },
   pressed: {
     opacity: 0.7,

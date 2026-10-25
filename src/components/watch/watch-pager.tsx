@@ -1,6 +1,5 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useLayoutEffect, useRef } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, {
   type SharedValue,
@@ -14,7 +13,6 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { LivePage } from '@/components/watch/live-page';
 import { VodPage } from '@/components/watch/vod-page';
-import { Spacing } from '@/constants/theme';
 import type { Vod } from '@/data/videos';
 import { type FeedItem, feedItemKey } from '@/hooks/use-watch-feed';
 
@@ -27,7 +25,7 @@ const SWIPE_VELOCITY = 800;
 // Dragging toward a side with no video only moves this fraction of the finger's distance.
 const EDGE_RESISTANCE = 0.25;
 const SETTLE_MS = 220;
-// Keep swipes clear of the native controls' scrubber along the bottom edge.
+// Keep swipes clear of the progress bar along the bottom edge (see VideoControls).
 const SCRUBBER_CLEARANCE = 100;
 
 type WatchPagerProps = {
@@ -76,13 +74,6 @@ export function WatchPager({
     if (!hasNext) return;
     offset.set(withTiming(-width, { duration: SETTLE_MS }, (finished) => {
       if (finished) scheduleOnRN(onNext);
-    }));
-  };
-
-  const goPrevious = () => {
-    if (!hasPrevious) return;
-    offset.set(withTiming(width, { duration: SETTLE_MS }, (finished) => {
-      if (finished) scheduleOnRN(onPrevious);
     }));
   };
 
@@ -149,27 +140,6 @@ export function WatchPager({
           ))}
         </View>
       </GestureDetector>
-
-      <View
-        pointerEvents="box-none"
-        // In landscape the notch / Dynamic Island sits on the left or right edge
-        style={[
-          styles.navRow,
-          { paddingLeft: insets.left + Spacing.three, paddingRight: insets.right + Spacing.three },
-        ]}>
-        <NavButton
-          icon={{ ios: 'backward.end.fill', android: 'skip_previous', web: 'skip_previous' }}
-          accessibilityLabel="Previous"
-          disabled={!hasPrevious}
-          onPress={goPrevious}
-        />
-        <NavButton
-          icon={{ ios: 'forward.end.fill', android: 'skip_next', web: 'skip_next' }}
-          accessibilityLabel="Next"
-          disabled={!hasNext}
-          onPress={goNext}
-        />
-      </View>
     </View>
   );
 }
@@ -198,51 +168,10 @@ function Slot({ slot, width, offset, children }: SlotProps) {
   );
 }
 
-type NavButtonProps = {
-  icon: SymbolViewProps['name'];
-  accessibilityLabel: string;
-  disabled: boolean;
-  onPress: () => void;
-};
-
-function NavButton({ icon, accessibilityLabel, disabled, onPress }: NavButtonProps) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.navButton, disabled && styles.disabled, pressed && styles.pressed]}>
-      <SymbolView name={icon} tintColor="#ffffff" size={24} />
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
     overflow: 'hidden',
-  },
-  navRow: {
-    ...StyleSheet.absoluteFill,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  navButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  disabled: {
-    opacity: 0.35,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

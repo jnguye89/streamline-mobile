@@ -53,6 +53,14 @@
           "domain": "auth.skriin.com",
           "customScheme": "skriin"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Skriin uses your photo library so you can choose a profile picture.",
+          "cameraPermission": "Skriin uses the camera when you go live.",
+          "microphonePermission": "Skriin uses the microphone when you go live."
+        }
       ]
     ],
     "experiments": {

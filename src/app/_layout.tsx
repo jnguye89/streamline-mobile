@@ -4,6 +4,7 @@ import { Auth0Provider } from 'react-native-auth0';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ApiAuthBridge } from '@/components/api-auth-bridge';
+import { ProfileScreenOptions } from '@/components/profile/screen-options';
 import { Auth0ClientId, Auth0Domain } from '@/constants/auth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -14,7 +15,11 @@ export default function RootLayout() {
       <ApiAuthBridge />
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack screenOptions={{ headerShown: false }} />
+          <Stack screenOptions={{ headerShown: false }}>
+            {/* Declared here, not inside the screens, so the opening animation already uses them. */}
+            <Stack.Screen name="profile/index" options={ProfileScreenOptions} />
+            <Stack.Screen name="profile/[id]" options={ProfileScreenOptions} />
+          </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>
       </GestureHandlerRootView>

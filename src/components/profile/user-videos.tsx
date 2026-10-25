@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,6 +10,8 @@ import { useTheme } from '@/hooks/use-theme';
 
 type UserVideosProps = {
   userId: string;
+  /** Shown above the grid: whose profile this is. */
+  header?: ReactNode;
   /** Whose videos these are, for the empty and error messages. */
   own: boolean;
 };
@@ -18,7 +20,7 @@ type UserVideosProps = {
  * A user's uploaded videos as a grid, like the video list on streamline-ui's /profile pages.
  * Only one tile plays at a time, so a screenful of videos isn't all streaming at once.
  */
-export function UserVideos({ userId, own }: UserVideosProps) {
+export function UserVideos({ userId, header, own }: UserVideosProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -92,7 +94,12 @@ export function UserVideos({ userId, own }: UserVideosProps) {
         gap: Spacing.three,
       }}
       columnWrapperStyle={{ gap: Spacing.three }}
-      ListHeaderComponent={<ThemedText type="subtitle">Videos</ThemedText>}
+      ListHeaderComponent={
+        <View style={styles.header}>
+          {header}
+          <ThemedText type="subtitle">Videos</ThemedText>
+        </View>
+      }
       ListEmptyComponent={
         <ThemedText themeColor="textSecondary">
           {own ? 'You haven’t uploaded any videos yet.' : 'No videos yet.'}
@@ -111,6 +118,9 @@ export function UserVideos({ userId, own }: UserVideosProps) {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    gap: Spacing.three,
+  },
   centered: {
     flex: 1,
     alignItems: 'center',

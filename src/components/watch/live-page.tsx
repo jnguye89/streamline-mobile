@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ProfileButtonSize } from '@/components/profile-button';
 import { ThemedText } from '@/components/themed-text';
 import { LiveChannel } from '@/components/watch/live-channel';
 import { Spacing } from '@/constants/theme';
@@ -35,7 +36,8 @@ export function LivePage({ stream, active, onError }: LivePageProps) {
           styles.topBar,
           {
             paddingTop: insets.top + Spacing.three,
-            paddingLeft: insets.left + Spacing.three,
+            // Leave the top-left corner to the go-live button.
+            paddingLeft: insets.left + Spacing.three + ProfileButtonSize + Spacing.two,
             paddingRight: insets.right + Spacing.three,
           },
         ]}>

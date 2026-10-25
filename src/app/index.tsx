@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { useAuth0 } from 'react-native-auth0';
 
+import { GoLiveButton } from '@/components/go-live-button';
 import { ProfileButton } from '@/components/profile-button';
 import { ThemedText } from '@/components/themed-text';
 import { WatchPager } from '@/components/watch/watch-pager';
@@ -26,6 +27,7 @@ export default function WatchScreen() {
         <WatchFeed />
       )}
 
+      <GoLiveButton />
       <ProfileButton />
     </View>
   );

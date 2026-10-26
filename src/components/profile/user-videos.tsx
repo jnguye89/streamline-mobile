@@ -85,6 +85,9 @@ export function UserVideos({ userId, header, own }: UserVideosProps) {
       data={videos}
       key={columns}
       numColumns={columns}
+      // iOS 26+ draws a translucent header over the page; inset the content below it rather
+      // than letting the name and first row scroll under the back button.
+      contentInsetAdjustmentBehavior="automatic"
       keyExtractor={(video) => String(video.id)}
       contentContainerStyle={{
         paddingLeft,

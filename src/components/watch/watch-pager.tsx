@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -55,25 +55,52 @@ export function WatchPager({
 }: WatchPagerProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const offset = useSharedValue(0);
   const consecutiveErrors = useRef(0);
+  // Pages sit on a strip: each has a fixed index, and `position` is how far the strip has
+  // scrolled. A swipe that lands moves `base` along with the pages' slots, so a page keeps its
+  // index (and its place on screen) through the re-render — nothing has to snap back, which
+  // used to leave the UI thread a frame or two showing the wrong page.
+  const [base, setBase] = useState(0);
+  const position = useSharedValue(0);
+  // The neighbor a swipe is pulling in. Its video starts as soon as it shows at the edge,
+  // rather than once the swipe lands. `revealingSide` mirrors it on the UI thread so a drag
+  // only crosses over to JS when the side actually changes.
+  const [revealingKey, setRevealingKey] = useState<string | null>(null);
+  const revealingSide = useSharedValue(0);
 
   const currentKey = feedItemKey(current);
   const nextKey = nextItem && feedItemKey(nextItem);
   const hasNext = nextItem !== null && nextKey !== currentKey;
   // With two items, "next" wraps around to the previous one — it can only sit on one side.
-  const hasPrevious = previousItem !== null && feedItemKey(previousItem) !== nextKey;
+  const previousKey = previousItem && feedItemKey(previousItem);
+  const hasPrevious = previousItem !== null && previousKey !== nextKey;
 
   // Each page is keyed by item, so when a neighbor becomes current it keeps its player
-  // (and whatever it has buffered). Recenter in the same commit that moves it into the middle.
+  // (and whatever it has buffered). After a swipe this is already where the strip ended up;
+  // it only moves anything when the feed changes some other way, or the screen resizes.
   useLayoutEffect(() => {
-    offset.set(0);
-  }, [currentKey, offset]);
+    position.set(base * width);
+  }, [currentKey, base, width, position]);
+
+  const advance = () => {
+    setBase((b) => b + 1);
+    setRevealingKey(null);
+    revealingSide.set(0);
+    onNext();
+  };
+  const retreat = () => {
+    setBase((b) => b - 1);
+    setRevealingKey(null);
+    revealingSide.set(0);
+    onPrevious();
+  };
 
   const goNext = () => {
     if (!hasNext) return;
-    offset.set(withTiming(-width, { duration: SETTLE_MS }, (finished) => {
-      if (finished) scheduleOnRN(onNext);
+    setRevealingKey(nextKey);
+    revealingSide.set(1);
+    position.set(withTiming((base + 1) * width, { duration: SETTLE_MS }, (finished) => {
+      if (finished) scheduleOnRN(advance);
     }));
   };
 
@@ -84,21 +111,28 @@ export function WatchPager({
     onUpdate: (e) => {
       'worklet';
       const resisted = (e.translationX < 0 && !hasNext) || (e.translationX > 0 && !hasPrevious);
-      offset.set(resisted ? e.translationX * EDGE_RESISTANCE : e.translationX);
+      position.set(base * width - (resisted ? e.translationX * EDGE_RESISTANCE : e.translationX));
+      const side = e.translationX < 0 ? (hasNext ? 1 : 0) : hasPrevious ? -1 : 0;
+      if (side !== revealingSide.get()) {
+        revealingSide.set(side);
+        scheduleOnRN(setRevealingKey, side === 1 ? nextKey : side === -1 ? previousKey : null);
+      }
     },
     onDeactivate: (e) => {
       'worklet';
       const threshold = width * SWIPE_DISTANCE_RATIO;
       if (hasNext && (e.translationX < -threshold || e.velocityX < -SWIPE_VELOCITY)) {
-        offset.set(withTiming(-width, { duration: SETTLE_MS }, (finished) => {
-          if (finished) scheduleOnRN(onNext);
+        position.set(withTiming((base + 1) * width, { duration: SETTLE_MS }, (finished) => {
+          if (finished) scheduleOnRN(advance);
         }));
       } else if (hasPrevious && (e.translationX > threshold || e.velocityX > SWIPE_VELOCITY)) {
-        offset.set(withTiming(width, { duration: SETTLE_MS }, (finished) => {
-          if (finished) scheduleOnRN(onPrevious);
+        position.set(withTiming((base - 1) * width, { duration: SETTLE_MS }, (finished) => {
+          if (finished) scheduleOnRN(retreat);
         }));
       } else {
-        offset.set(withSpring(0, { duration: SETTLE_MS }));
+        position.set(withSpring(base * width, { duration: SETTLE_MS }));
+        revealingSide.set(0);
+        scheduleOnRN(setRevealingKey, null);
       }
     },
   });
@@ -123,11 +157,17 @@ export function WatchPager({
       <GestureDetector gesture={pan}>
         <View style={StyleSheet.absoluteFill}>
           {pages.map(({ item, slot }) => (
-            <Slot key={feedItemKey(item)} slot={slot} width={width} offset={offset}>
+            <Slot
+              key={feedItemKey(item)}
+              slot={slot}
+              index={base + slot}
+              width={width}
+              position={position}>
               {item.type === 'vod' ? (
                 <VodPage
                   video={item.video}
                   active={slot === 0 && focused}
+                  previewing={slot !== 0 && focused && feedItemKey(item) === revealingKey}
                   onEnded={hasNext ? goNext : undefined}
                   onError={onError}
                   onPlaying={onPlaying}
@@ -145,16 +185,19 @@ export function WatchPager({
 }
 
 type SlotProps = {
+  /** -1, 0 or 1: previous, current or next. */
   slot: number;
+  /** Where the page sits on the strip; stays the same while the page is mounted. */
+  index: number;
   width: number;
-  offset: SharedValue<number>;
+  position: SharedValue<number>;
   children: React.ReactNode;
 };
 
-/** Positions a page one screen-width per slot away from center, shifted by the drag. */
-function Slot({ slot, width, offset, children }: SlotProps) {
+/** Places a page at its spot on the strip, relative to how far the strip has scrolled. */
+function Slot({ slot, index, width, position, children }: SlotProps) {
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: slot * width + offset.get() }],
+    transform: [{ translateX: index * width - position.get() }],
   }));
 
   return (

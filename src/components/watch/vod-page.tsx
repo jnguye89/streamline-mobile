@@ -1,6 +1,7 @@
 import { useEvent, useEventListener } from 'expo';
+import { Image } from 'expo-image';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, type VideoPlayer, type VideoThumbnail, VideoView } from 'expo-video';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import {
@@ -25,11 +26,15 @@ import { useOpenProfile } from '@/hooks/use-open-profile';
 
 // How long the controls stay up after the last tap while the video plays.
 const CONTROLS_HIDE_MS = 3000;
+// Size cap for the still frame shown over a video until it's visibly playing.
+const POSTER_MAX_SIZE = 1280;
 
 type VodPageProps = {
   video: Vod;
   /** The page on screen. Off-screen neighbors stay loaded but paused, ready to swipe in. */
   active: boolean;
+  /** A swipe is pulling this page in: play it, muted, so it's already moving as it arrives. */
+  previewing?: boolean;
   /** Called when playback finishes. Without it, the video just replays. */
   onEnded?: () => void;
   onError: () => void;
@@ -38,7 +43,15 @@ type VodPageProps = {
 };
 
 /** One video in the feed: its own player plus the stats that belong to it. */
-export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }: VodPageProps) {
+export function VodPage({
+  video,
+  active,
+  previewing = false,
+  onEnded,
+  onError,
+  onPlaying,
+  onUpdate,
+}: VodPageProps) {
   const insets = useSafeAreaInsets();
   const player = useVideoPlayer(video.src, (p) => {
     // Browsers only allow autoplay with sound off; native platforms autoplay unmuted.
@@ -48,17 +61,59 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
   });
   const viewed = useRef(false);
 
+  // On screen and playing: the current page, or the one a swipe is pulling in.
+  const playing = active || previewing;
+  const mode = active ? 'active' : previewing ? 'preview' : 'idle';
+  const lastMode = useRef(mode);
+
+  // A still of the video, shown over it until it's visibly playing. The VideoView is
+  // remounted when the page starts playing (see its key below) and is black until it draws,
+  // and an off-screen neighbor may not draw at all — without this, every swipe flashes black.
+  const [poster, setPoster] = useState<VideoThumbnail | null>(null);
+  // Whether the current view has shown playback move on. iOS reports a view's first frame as
+  // soon as it mounts, before anything is on screen, so progress is the only reliable signal.
+  const [revealed, setRevealed] = useState(false);
+  const startTime = useRef(0);
+
   useEffect(() => {
-    if (!active) {
-      player.pause();
+    const from = lastMode.current;
+    lastMode.current = mode;
+    if (mode === 'preview') {
+      // Sound stays with the current video until the swipe lands.
+      setMuted(player, true);
+      startTime.current = player.currentTime;
+      if (player.status !== 'error') player.play();
       return;
     }
+    if (mode === 'idle') {
+      player.pause();
+      // A swipe that springs back leaves its video where it was, matching its still.
+      if (from === 'preview') {
+        seekTo(player, startTime.current);
+        return;
+      }
+      // Swiping back to a video picks up where it left off, so the still should too.
+      if (from === 'active' && player.currentTime > 0) {
+        player
+          .generateThumbnailsAsync(player.currentTime, {
+            maxWidth: POSTER_MAX_SIZE,
+            maxHeight: POSTER_MAX_SIZE,
+          })
+          .then(([frame]) => frame && setPoster(frame))
+          .catch((e) => console.warn('Couldn’t capture video frame:', e));
+      }
+      return;
+    }
+    // Browsers only allow autoplay with sound off; native platforms play unmuted.
+    setMuted(player, Platform.OS === 'web');
+    // Arriving from a preview, it's already playing and on screen.
+    if (from !== 'preview') startTime.current = player.currentTime;
     // A neighbor can fail while it's preloading off-screen, before anyone is watching it.
     if (player.status === 'error') onError();
     else player.play();
-    // Only react to this page becoming (in)active, not to callback identity changes.
+    // Only react to this page's mode changing, not to callback identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player, active]);
+  }, [player, mode]);
 
   useEventListener(player, 'playToEnd', () => {
     if (!active) return;
@@ -72,8 +127,14 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
     if (active) onError();
   });
 
+  useEventListener(player, 'timeUpdate', ({ currentTime }) => {
+    if (playing && !revealed && currentTime > startTime.current) setRevealed(true);
+  });
+
   // Count a view the first time a video actually starts playing, not on every resume.
   useEventListener(player, 'playingChange', ({ isPlaying }) => {
+    // Paused because the page went off-screen: cover it again until it plays once more.
+    if (!isPlaying && !playing) setRevealed(false);
     if (!isPlaying || !active) return;
     onPlaying();
     if (viewed.current) return;
@@ -86,22 +147,24 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
 
   // Horizontal videos fill the screen; vertical ones fit inside it rather than being cropped
   // to a sliver. The track size the player reports ignores the rotation flag phones record
-  // vertical video with, so measure a tiny first-frame thumbnail instead — it has rotation
+  // vertical video with, so measure the first-frame poster instead — it has rotation
   // applied. Until that's known, fit rather than risk zooming a vertical video.
-  const [isVertical, setIsVertical] = useState<boolean | null>(null);
   useEffect(() => {
-    if (status !== 'readyToPlay' || isVertical !== null) return;
+    if (status !== 'readyToPlay' || poster !== null) return;
     let cancelled = false;
     player
-      .generateThumbnailsAsync(0, { maxWidth: 64, maxHeight: 64 })
+      .generateThumbnailsAsync(0, { maxWidth: POSTER_MAX_SIZE, maxHeight: POSTER_MAX_SIZE })
       .then(([frame]) => {
-        if (!cancelled && frame) setIsVertical(frame.height > frame.width);
+        if (!cancelled && frame) setPoster(frame);
       })
-      .catch((e) => console.warn('Couldn’t measure video:', e));
+      .catch((e) => console.warn('Couldn’t capture video frame:', e));
     return () => {
       cancelled = true;
     };
-  }, [player, status, isVertical]);
+  }, [player, status, poster]);
+  const isVertical = poster ? poster.height > poster.width : null;
+  const contentFit = isVertical === false ? 'cover' : 'contain';
+
   const onLike = () => {
     if (video.liked) return;
     onUpdate({ liked: true, likeCount: video.likeCount + 1 });
@@ -159,15 +222,23 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
       <VideoView
         // iOS can stop drawing a view that was slid in from off-screen once its player
         // starts. A fresh view for the same player (and its buffer) draws reliably.
-        key={active ? 'active' : 'idle'}
+        key={playing ? 'playing' : 'idle'}
         player={player}
         style={StyleSheet.absoluteFill}
-        contentFit={isVertical === false ? 'cover' : 'contain'}
+        contentFit={contentFit}
         // Android: neighboring "cover" views misplace their video on the default SurfaceView,
         // and a TextureView also follows the pager's swipe transform. Ignored on iOS.
         surfaceType="textureView"
         nativeControls={false}
       />
+      {poster && !(playing && revealed) && (
+        <Image
+          source={poster}
+          style={StyleSheet.absoluteFill}
+          contentFit={contentFit}
+          pointerEvents="none"
+        />
+      )}
 
       <GestureDetector gesture={pageGestures}>
         <View style={StyleSheet.absoluteFill} />
@@ -232,6 +303,16 @@ export function VodPage({ video, active, onEnded, onError, onPlaying, onUpdate }
       ))}
     </View>
   );
+}
+
+// Player settings change in response to props, outside the player's setup callback, where
+// the React Compiler won't let a component assign to them directly.
+function setMuted(player: VideoPlayer, muted: boolean) {
+  player.muted = muted;
+}
+
+function seekTo(player: VideoPlayer, time: number) {
+  player.currentTime = time;
 }
 
 type StatProps = {

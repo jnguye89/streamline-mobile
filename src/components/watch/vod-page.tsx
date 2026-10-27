@@ -23,6 +23,7 @@ import { VideoControls } from '@/components/watch/video-controls';
 import { Spacing } from '@/constants/theme';
 import { addLike, addView, type Vod } from '@/data/videos';
 import { useOpenProfile } from '@/hooks/use-open-profile';
+import { formatCount } from '@/lib/format-count';
 
 // How long the controls stay up after the last tap while the video plays.
 const CONTROLS_HIDE_MS = 3000;
@@ -264,34 +265,55 @@ export function VodPage({
             This video couldn&apos;t be played.
           </ThemedText>
         )}
-        <View style={styles.stats}>
-          <Stat
-            icon={{ ios: 'eye.fill', android: 'visibility', web: 'visibility' }}
-            label={video.viewCount.toLocaleString()}
-            accessibilityLabel={`${video.viewCount} views`}
-          />
-          <Stat
+      </View>
+
+      {/* The bottom row belongs to the controls' progress bar while it's up, so the owner and
+          counts step aside until the controls hide again. */}
+      {!(active && controlsVisible) && (
+        <>
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.bottomRow,
+              { left: insets.left + Spacing.three, bottom: insets.bottom + Spacing.three },
+            ]}>
+            <Stat
+              icon={{ ios: 'eye.fill', android: 'visibility', web: 'visibility' }}
+              label={formatCount(video.viewCount)}
+              accessibilityLabel={`${video.viewCount} views`}
+            />
+          </View>
+
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.bottomRow,
+              styles.bottomCenter,
+              { bottom: insets.bottom + Spacing.three },
+            ]}>
+            <OwnerAvatar ownerId={video.user} />
+          </View>
+
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.bottomRow,
+              { right: insets.right + Spacing.three, bottom: insets.bottom + Spacing.three },
+            ]}>
+            <Stat
             icon={
               video.liked
                 ? { ios: 'heart.fill', android: 'favorite', web: 'favorite' }
                 : { ios: 'heart', android: 'favorite_border', web: 'favorite_border' }
             }
             iconColor={video.liked ? LikeColor : undefined}
-            label={video.likeCount.toLocaleString()}
+            label={formatCount(video.likeCount)}
             accessibilityLabel={video.liked ? 'Already liked' : 'Like'}
             onPress={video.liked ? undefined : onLike}
-          />
-        </View>
-      </View>
-
-      <View
-        pointerEvents="box-none"
-        style={[
-          styles.owner,
-          { left: insets.left + Spacing.three, bottom: insets.bottom + Spacing.three },
-        ]}>
-        <OwnerAvatar ownerId={video.user} />
-      </View>
+            />
+          </View>
+        </>
+      )}
 
       {bursts.map((burst) => (
         <HeartBurst
@@ -344,9 +366,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  owner: {
-    position: 'absolute',
-  },
   topBar: {
     position: 'absolute',
     top: 0,
@@ -357,9 +376,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.three,
   },
-  stats: {
+  bottomRow: {
+    position: 'absolute',
+    height: ProfileButtonSize,
     flexDirection: 'row',
-    gap: Spacing.two,
+    alignItems: 'center',
+  },
+  bottomCenter: {
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
   },
   stat: {
     flexDirection: 'row',

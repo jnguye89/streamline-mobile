@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import type { Vod } from '@/data/videos';
+import { formatCount } from '@/lib/format-count';
 
 type VideoTileProps = {
   video: Vod;
@@ -84,7 +85,7 @@ export function VideoTile({ video, width, playing, onToggle }: VideoTileProps) {
             size={14}
           />
           <ThemedText type="small" style={styles.onVideo}>
-            {video.viewCount.toLocaleString()}
+            {formatCount(video.viewCount)}
           </ThemedText>
         </View>
         <View style={styles.chip}>
@@ -94,7 +95,7 @@ export function VideoTile({ video, width, playing, onToggle }: VideoTileProps) {
             size={14}
           />
           <ThemedText type="small" style={styles.onVideo}>
-            {video.likeCount.toLocaleString()}
+            {formatCount(video.likeCount)}
           </ThemedText>
         </View>
       </View>

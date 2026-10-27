@@ -99,8 +99,8 @@ export function VideoControls({ player, onInteract }: VideoControlsProps) {
         style={[
           styles.bottomBar,
           {
-            // Starts after the owner icon in the bottom-left corner.
-            left: insets.left + Spacing.three + ProfileButtonSize + Spacing.three,
+            // The owner icon and counts hide while the controls are up.
+            left: insets.left + Spacing.three,
             right: insets.right + Spacing.three,
             bottom: insets.bottom + Spacing.three,
           },

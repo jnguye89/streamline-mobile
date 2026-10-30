@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProfileButtonSize } from '@/components/profile-button';
 import { ThemedText } from '@/components/themed-text';
 import { OnVideoShadow } from '@/components/user-mark';
+import { ContentMenuButton } from '@/components/watch/content-menu-button';
 import { HeartBurst, LikeColor } from '@/components/watch/heart-burst';
 import { OwnerAvatar } from '@/components/watch/owner-avatar';
 import { VideoControls } from '@/components/watch/video-controls';
@@ -30,6 +31,10 @@ const CONTROLS_HIDE_MS = 3000;
 // Size cap for the still frame shown over a video until it's visibly playing.
 const POSTER_MAX_SIZE = 1280;
 
+// Orientation already measured from a frame, by video id, so a page that mounts again — when
+// you swipe back to it, say — fits right away.
+const measuredVertical = new Map<number, boolean>();
+
 type VodPageProps = {
   video: Vod;
   /** The page on screen. Off-screen neighbors stay loaded but paused, ready to swipe in. */
@@ -41,6 +46,10 @@ type VodPageProps = {
   onError: () => void;
   onPlaying: () => void;
   onUpdate: (patch: Partial<Vod>) => void;
+  /** Reported: take this video out of the feed. */
+  onReported: () => void;
+  /** Blocked its owner: take everything of theirs out of the feed. */
+  onBlocked: (userId: string) => void;
 };
 
 /** One video in the feed: its own player plus the stats that belong to it. */
@@ -52,6 +61,8 @@ export function VodPage({
   onError,
   onPlaying,
   onUpdate,
+  onReported,
+  onBlocked,
 }: VodPageProps) {
   const insets = useSafeAreaInsets();
   const player = useVideoPlayer(video.src, (p) => {
@@ -147,23 +158,39 @@ export function VodPage({
   const { status } = useEvent(player, 'statusChange', { status: player.status });
 
   // Horizontal videos fill the screen; vertical ones fit inside it rather than being cropped
-  // to a sliver. The track size the player reports ignores the rotation flag phones record
-  // vertical video with, so measure the first-frame poster instead — it has rotation
-  // applied. Until that's known, fit rather than risk zooming a vertical video.
+  // to a sliver. The track size arrives with the source, with no extra download, so it sets
+  // the shape first. It ignores the rotation flag phones record vertical video with, though,
+  // so the first-frame poster (which has rotation applied, but costs its own request for the
+  // frame) has the final say. Until either is known, fit rather than risk zooming.
+  const [trackVertical, setTrackVertical] = useState<boolean | null>(null);
+  const onTrackSize = ({ width, height }: { width: number; height: number }) => {
+    if (width > 0 && height > 0) setTrackVertical(height > width);
+  };
+  useEventListener(player, 'sourceLoad', ({ availableVideoTracks }) => {
+    if (availableVideoTracks[0]) onTrackSize(availableVideoTracks[0].size);
+  });
+  useEventListener(player, 'videoTrackChange', ({ videoTrack }) => {
+    if (videoTrack) onTrackSize(videoTrack.size);
+  });
+
   useEffect(() => {
     if (status !== 'readyToPlay' || poster !== null) return;
     let cancelled = false;
     player
       .generateThumbnailsAsync(0, { maxWidth: POSTER_MAX_SIZE, maxHeight: POSTER_MAX_SIZE })
       .then(([frame]) => {
-        if (!cancelled && frame) setPoster(frame);
+        if (!frame) return;
+        measuredVertical.set(video.id, frame.height > frame.width);
+        if (!cancelled) setPoster(frame);
       })
       .catch((e) => console.warn('Couldn’t capture video frame:', e));
     return () => {
       cancelled = true;
     };
-  }, [player, status, poster]);
-  const isVertical = poster ? poster.height > poster.width : null;
+  }, [player, status, poster, video.id]);
+  const isVertical = poster
+    ? poster.height > poster.width
+    : (measuredVertical.get(video.id) ?? trackVertical);
   const contentFit = isVertical === false ? 'cover' : 'contain';
 
   const onLike = () => {
@@ -264,6 +291,15 @@ export function VodPage({
           <ThemedText type="smallBold" style={styles.onVideo}>
             This video couldn&apos;t be played.
           </ThemedText>
+        )}
+        {active && (
+          <ContentMenuButton
+            target={{ videoId: video.id }}
+            ownerId={video.user}
+            noun="video"
+            onReported={onReported}
+            onBlocked={onBlocked}
+          />
         )}
       </View>
 

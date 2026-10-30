@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProfileButtonSize } from '@/components/profile-button';
 import { ThemedText } from '@/components/themed-text';
+import { ContentMenuButton } from '@/components/watch/content-menu-button';
 import { LiveChannel } from '@/components/watch/live-channel';
 import { Spacing } from '@/constants/theme';
 import type { LiveStream } from '@/data/live-streams';
@@ -12,10 +13,14 @@ type LivePageProps = {
   /** Only the page on screen joins the channel; off-screen it's just a title card. */
   active: boolean;
   onError: () => void;
+  /** Reported: take this stream out of the feed. */
+  onReported: () => void;
+  /** Blocked its host: take everything of theirs out of the feed. */
+  onBlocked: (userId: string) => void;
 };
 
 /** One live stream in the feed. */
-export function LivePage({ stream, active, onError }: LivePageProps) {
+export function LivePage({ stream, active, onError, onReported, onBlocked }: LivePageProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -31,14 +36,14 @@ export function LivePage({ stream, active, onError }: LivePageProps) {
       )}
 
       <View
-        pointerEvents="none"
+        pointerEvents="box-none"
         style={[
           styles.topBar,
           {
             paddingTop: insets.top + Spacing.three,
-            // Leave the top-left corner to the go-live button.
+            // Leave the top corners to the go-live and profile buttons.
             paddingLeft: insets.left + Spacing.three + ProfileButtonSize + Spacing.two,
-            paddingRight: insets.right + Spacing.three,
+            paddingRight: insets.right + Spacing.three + ProfileButtonSize + Spacing.two,
           },
         ]}>
         <View style={styles.liveBadge}>
@@ -50,6 +55,16 @@ export function LivePage({ stream, active, onError }: LivePageProps) {
           <ThemedText type="smallBold" style={styles.onVideo}>
             {stream.username}
           </ThemedText>
+        )}
+        <View style={styles.spacer} />
+        {active && (
+          <ContentMenuButton
+            target={{ channelName: stream.channelName }}
+            ownerId={stream.userId}
+            noun="live stream"
+            onReported={onReported}
+            onBlocked={onBlocked}
+          />
         )}
       </View>
     </View>
@@ -74,6 +89,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+  },
+  spacer: {
+    flex: 1,
   },
   liveBadge: {
     paddingHorizontal: Spacing.two,

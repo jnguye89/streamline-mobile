@@ -19,6 +19,10 @@ export default function RootLayout() {
             {/* Declared here, not inside the screens, so the opening animation already uses them. */}
             <Stack.Screen name="profile/index" options={ProfileScreenOptions} />
             <Stack.Screen name="profile/[id]" options={ProfileScreenOptions} />
+            <Stack.Screen
+              name="blocked-users"
+              options={{ headerShown: true, title: 'Blocked users', headerBackTitle: 'Profile' }}
+            />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

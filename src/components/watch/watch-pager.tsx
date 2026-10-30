@@ -35,6 +35,10 @@ type WatchPagerProps = {
   onNext: () => void;
   onPrevious: () => void;
   onUpdateVod: (patch: Partial<Vod>) => void;
+  /** Takes a reported item out of the feed, by feedItemKey. */
+  onHideItem: (key: string) => void;
+  /** Takes a blocked user's items out of the feed. */
+  onHideUser: (userId: string) => void;
   /** False while another screen (e.g. the profile) covers the feed: nothing plays. */
   focused: boolean;
 };
@@ -51,6 +55,8 @@ export function WatchPager({
   onNext,
   onPrevious,
   onUpdateVod,
+  onHideItem,
+  onHideUser,
   focused,
 }: WatchPagerProps) {
   const insets = useSafeAreaInsets();
@@ -172,9 +178,17 @@ export function WatchPager({
                   onError={onError}
                   onPlaying={onPlaying}
                   onUpdate={onUpdateVod}
+                  onReported={() => onHideItem(feedItemKey(item))}
+                  onBlocked={onHideUser}
                 />
               ) : (
-                <LivePage stream={item.stream} active={slot === 0 && focused} onError={onError} />
+                <LivePage
+                  stream={item.stream}
+                  active={slot === 0 && focused}
+                  onError={onError}
+                  onReported={() => onHideItem(feedItemKey(item))}
+                  onBlocked={onHideUser}
+                />
               )}
             </Slot>
           ))}

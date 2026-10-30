@@ -48,6 +48,8 @@ function WatchFeed() {
           onNext={feed.next}
           onPrevious={feed.previous}
           onUpdateVod={feed.updateCurrentVod}
+          onHideItem={feed.hideItem}
+          onHideUser={feed.hideUser}
           focused={focused}
         />
       ) : (

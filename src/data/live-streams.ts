@@ -9,12 +9,14 @@ import { apiFetch } from '@/data/api-client';
 type AgoraStreamDto = {
   id: number;
   channelName: string;
-  user?: { username?: string | null } | null;
+  user?: { auth0UserId?: string; username?: string | null } | null;
 };
 
 export type LiveStream = {
   id: number;
   channelName: string;
+  /** The host's Auth0 user id. */
+  userId: string | null;
   username: string | null;
 };
 
@@ -30,7 +32,12 @@ export async function getLiveStreams(): Promise<LiveStream[]> {
 
   const streams: AgoraStreamDto[] = await res.json();
   return streams
-    .map((s) => ({ id: s.id, channelName: s.channelName, username: s.user?.username ?? null }))
+    .map((s) => ({
+      id: s.id,
+      channelName: s.channelName,
+      userId: s.user?.auth0UserId ?? null,
+      username: s.user?.username ?? null,
+    }))
     .sort((a, b) => a.id - b.id);
 }
 

@@ -36,7 +36,8 @@ type Action =
   | { type: 'livesPolled'; lives: LiveStream[] }
   | { type: 'next' }
   | { type: 'previous' }
-  | { type: 'updateCurrentVod'; patch: Partial<Vod> };
+  | { type: 'updateCurrentVod'; patch: Partial<Vod> }
+  | { type: 'hide'; matches: (item: FeedItem) => boolean };
 
 const initialState: State = {
   items: [],
@@ -62,6 +63,23 @@ function maybeStart(state: State): State {
   };
 }
 
+/** The user whose video or stream this is. */
+export function feedItemOwner(item: FeedItem): string | null {
+  return item.type === 'vod' ? item.video.user : item.stream.userId;
+}
+
+/**
+ * Removes matching items. If the current one goes, whatever followed it takes its place.
+ */
+function hideItems(state: State, matches: (item: FeedItem) => boolean): State {
+  const removedBefore = state.items.slice(0, state.index).filter(matches).length;
+  const kept = state.items.filter((item) => !matches(item));
+  if (kept.length === state.items.length) return state;
+  let index = Math.max(0, state.index - removedBefore);
+  if (index >= kept.length) index = 0;
+  return { ...state, items: kept, index };
+}
+
 /**
  * Drops streams that have ended and slots newly live ones in right after the current item,
  * so the very next swipe lands on them.
@@ -70,12 +88,7 @@ function mergeLives(state: State, lives: LiveStream[]): State {
   const liveKeys = new Set(lives.map((s) => feedItemKey(liveItem(s))));
   const isEnded = (item: FeedItem) => item.type === 'live' && !liveKeys.has(feedItemKey(item));
 
-  // Removing items before the current one shifts it back. If the current item is the one
-  // that ended, whatever follows it slides into its place.
-  const removedBefore = state.items.slice(0, state.index).filter(isEnded).length;
-  const kept = state.items.filter((item) => !isEnded(item));
-  let index = Math.max(0, state.index - removedBefore);
-  if (index >= kept.length) index = 0;
+  const { items: kept, index } = hideItems(state, isEnded);
 
   const present = new Set(kept.map(feedItemKey));
   const fresh = lives.filter((s) => !present.has(feedItemKey(liveItem(s)))).map(liveItem);
@@ -113,6 +126,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, index: (state.index + 1) % state.items.length };
     case 'previous':
       return { ...state, index: Math.max(0, state.index - 1) };
+    case 'hide':
+      return hideItems(state, action.matches);
     case 'updateCurrentVod': {
       const current = state.items[state.index];
       if (current?.type !== 'vod') return state;
@@ -199,6 +214,18 @@ export function useWatchFeed() {
     []
   );
 
+  /** Takes a reported video or stream out of the feed. */
+  const hideItem = useCallback(
+    (key: string) => dispatch({ type: 'hide', matches: (item) => feedItemKey(item) === key }),
+    []
+  );
+
+  /** Takes everything from a blocked user out of the feed. */
+  const hideUser = useCallback(
+    (userId: string) => dispatch({ type: 'hide', matches: (item) => feedItemOwner(item) === userId }),
+    []
+  );
+
   const status: FeedStatus = items.length
     ? 'ready'
     : !state.started || state.vodState === 'loading'
@@ -217,5 +244,7 @@ export function useWatchFeed() {
     previous,
     retry,
     updateCurrentVod,
+    hideItem,
+    hideUser,
   };
 }

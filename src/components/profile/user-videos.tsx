@@ -14,13 +14,15 @@ type UserVideosProps = {
   header?: ReactNode;
   /** Whose videos these are, for the empty and error messages. */
   own: boolean;
+  /** Shown below the grid, and below the error message if the videos don't load. */
+  footer?: ReactNode;
 };
 
 /**
  * A user's uploaded videos as a grid, like the video list on streamline-ui's /profile pages.
  * Only one tile plays at a time, so a screenful of videos isn't all streaming at once.
  */
-export function UserVideos({ userId, header, own }: UserVideosProps) {
+export function UserVideos({ userId, header, own, footer }: UserVideosProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -62,6 +64,7 @@ export function UserVideos({ userId, header, own }: UserVideosProps) {
           style={({ pressed }) => [styles.retry, { backgroundColor: theme.backgroundElement }, pressed && styles.pressed]}>
           <ThemedText type="smallBold">Try again</ThemedText>
         </Pressable>
+        {footer}
       </View>
     );
   }
@@ -108,6 +111,7 @@ export function UserVideos({ userId, header, own }: UserVideosProps) {
           {own ? 'You haven’t uploaded any videos yet.' : 'No videos yet.'}
         </ThemedText>
       }
+      ListFooterComponent={footer ? <View style={styles.footer}>{footer}</View> : undefined}
       renderItem={({ item }) => (
         <VideoTile
           video={item}
@@ -123,6 +127,10 @@ export function UserVideos({ userId, header, own }: UserVideosProps) {
 const styles = StyleSheet.create({
   header: {
     gap: Spacing.three,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingTop: Spacing.five,
   },
   centered: {
     flex: 1,

@@ -56,6 +56,17 @@ export function forgetUserProfile(auth0UserId: string) {
 }
 
 /**
+ * Permanently deletes the signed-in user's account (`DELETE /user/me`): their login, videos,
+ * likes and everything else of theirs. The caller still has to sign out locally.
+ */
+export async function deleteAccount(): Promise<void> {
+  const res = await apiFetch('/user/me', { method: 'DELETE' });
+  if (!res.ok) {
+    throw new Error(`Account deletion failed (${res.status}): ${await res.text()}`);
+  }
+}
+
+/**
  * Uploads a picked image as the signed-in user's profile picture (`POST /user/picture`), which
  * also makes it their Auth0 `picture`. Returns the new picture's URL.
  */
